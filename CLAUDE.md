@@ -47,9 +47,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-diet-track
 - `server/db.js` 初始化 SQLite 表结构并执行轻量迁移。运行时数据默认写入 `data/diet.sqlite`；测试通常使用 `createDatabase(':memory:')`。
 - LLM 解析契约会把 `foodItems` 和零热量 `waterItems` 分开；有热量饮品应进入 `foodItems`。`finalTotalCalories` 不包含饮水。
 - 前端源码在 `client/src/`：
-  - `App.tsx` 是顶层组合层，持有共享状态（`submitting`、`selectedDate`、`weightKg` 等）并把 hooks 组合起来。
-  - `client/src/hooks/` — `useDailyData`、`useFoodEntry`、`useWaterActions`、`useMutations`、`useResetData`。每个 hook 接收公共依赖（`refresh`、`isSubmitting`、`setMessage` 等）作为参数，避免在多个 hook 间隐式共享状态。
+  - `App.tsx` 是顶层组合层，持有共享状态（`submitting`、`selectedDate`、`weightKg`、`trendView`、`trendRange`、`customRange` 等）并把 hooks 组合起来。
+  - `client/src/hooks/` — `useDailyData`、`useRangeData`、`useFoodEntry`、`useWaterActions`、`useMutations`、`useResetData`。`useRangeData` 负责多日趋势数据，包括 `/api/daily-summaries` 和 `/api/weight-entries`。
   - `client/src/utils.ts` 是 barrel re-export，真正实现拆在 `client/src/utils/` 下：`date`、`metrics`、`tone`、`chart`。
+  - `client/src/components/` — `TrendSection` 提供「饮食 / 体重」视图切换和「当日 / 7天 / 30天 / 自定义」时间范围切换；`RangeTrendChart` 渲染多日热量+饮水曲线；`WeightTrendChart` 渲染体重曲线并对缺失值做前向填充（前一天 → 区间平均值 → 0）。
 - 前端请求统一通过 `client/src/api.ts`，该封装期望服务端返回 JSON，并在失败时抛出 `body.error.message`。
 - Vite 配置使用 `root: 'client'`，构建输出到 `public/`，开发时把 `/api` 代理到后端 3000 端口。
 

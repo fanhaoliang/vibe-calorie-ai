@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import FoodEntryForm from './components/FoodEntryForm';
 import Dashboard from './components/Dashboard';
@@ -8,15 +8,17 @@ import EntryList from './components/EntryList';
 import ResultModal from './components/ResultModal';
 import LoadingOverlay from './components/LoadingOverlay';
 import { CALORIE_TARGET, PERSON_HEIGHT_CM, DEFAULT_WEIGHT_KG, WATER_ML_PER_KG } from './constants';
-import { todayShanghai, formatDateShanghai, formatDateTimeShanghai } from './utils/date';
+import { todayShanghai, formatDateShanghai, formatDateTimeShanghai, addDays } from './utils/date';
 import { percent, ratioPercent, buildBodyMetrics } from './utils/metrics';
 import { toneForCalories, toneForWater } from './utils/tone';
 import { buildTodayPoints } from './utils/chart';
 import { useDailyData } from './hooks/useDailyData';
+import { useRangeData } from './hooks/useRangeData';
 import { useFoodEntry } from './hooks/useFoodEntry';
 import { useWaterActions } from './hooks/useWaterActions';
 import { useMutations } from './hooks/useMutations';
 import { useResetData } from './hooks/useResetData';
+import type { TrendView, TrendRange } from './components/TrendSection';
 
 const PAGE_BACKGROUND =
   'pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(126,154,134,0.24),transparent_30%),radial-gradient(circle_at_90%_12%,rgba(231,164,79,0.18),transparent_28%),linear-gradient(180deg,#f8f5ee_0%,#f2ecdf_100%)]';
@@ -30,6 +32,10 @@ export default function App() {
   const [selectedDateTime, setSelectedDateTime] = useState(() => new Date());
   const [showAllEntries, setShowAllEntries] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [trendView, setTrendView] = useState<TrendView>('diet');
+  const [trendRange, setTrendRange] = useState<TrendRange>('day');
+  const [customRange, setCustomRange] = useState<[string, string] | null>(null);
+
   // submitting 用 ref 同步读取，避免 hook 回调闭包拿到旧值
   const submittingRef = useRef(false);
   const setSubmittingBoth = (value: boolean) => {
@@ -42,12 +48,56 @@ export default function App() {
   const daily = useDailyData();
   const { summary, entries, waters, loading, message, setMessage } = daily;
 
+  // ===== 多日范围数据 =====
+  const { rangeData, rangeLoading, refreshRange, weightData, weightLoading, refreshWeight } = useRangeData();
+
   // 数据刷新时把最新已知体重同步到表单
   const refresh = async (date: string) => {
     const result = await daily.refresh(date);
     if (result.weightKg) setWeightKg(result.weightKg);
     return result;
   };
+
+  // 根据 range 和 selectedDate 计算起止日期
+  const resolveDates = useCallback(
+    (range: TrendRange, rangeValue: [string, string] | null) => {
+      let start: string;
+      let end: string;
+      if (range === 'custom' && rangeValue) {
+        [start, end] = rangeValue;
+      } else if (range === '7d') {
+        start = addDays(selectedDate, -6);
+        end = selectedDate;
+      } else if (range === '30d') {
+        start = addDays(selectedDate, -29);
+        end = selectedDate;
+      } else {
+        start = selectedDate;
+        end = selectedDate;
+      }
+      return { start, end };
+    },
+    [selectedDate]
+  );
+
+  // 趋势刷新：视图 + 范围变化时自动拉取
+  const refreshTrend = useCallback(
+    async (view: TrendView, range: TrendRange, rangeValue: [string, string] | null) => {
+      const { start, end } = resolveDates(range, rangeValue);
+      if (view === 'weight') {
+        await refreshWeight(start, end);
+      } else if (range === 'day') {
+        await refreshRange(start, end);
+      } else {
+        await refreshRange(start, end);
+      }
+    },
+    [resolveDates, refreshRange, refreshWeight]
+  );
+
+  useEffect(() => {
+    void refreshTrend(trendView, trendRange, customRange);
+  }, [trendView, trendRange, customRange, selectedDate, refreshTrend]);
 
   // 各业务 hook 共享同一组依赖
   const hookDeps = {
@@ -101,6 +151,20 @@ export default function App() {
     setSelectedDateTime(nextDate);
     setSelectedDate(nextDateText);
     void refresh(nextDateText);
+  };
+
+  const handleViewChange = (view: TrendView) => {
+    setTrendView(view);
+  };
+
+  const handleRangeChange = (range: TrendRange) => {
+    setTrendRange(range);
+    if (range === 'custom' && !customRange) {
+      const start = addDays(selectedDate, -6);
+      setCustomRange([start, selectedDate]);
+    } else if (range !== 'custom') {
+      setCustomRange(null);
+    }
   };
 
   return (
@@ -157,7 +221,21 @@ export default function App() {
           </div>
         )}
 
-        <TrendSection loading={loading} todayPoints={todayPoints} summary={summary} />
+        <TrendSection
+          view={trendView}
+          range={trendRange}
+          onViewChange={handleViewChange}
+          onRangeChange={handleRangeChange}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+          loading={loading}
+          todayPoints={todayPoints}
+          summary={summary}
+          rangeData={rangeData}
+          rangeLoading={rangeLoading}
+          weightData={weightData}
+          weightLoading={weightLoading}
+        />
 
         <EntryList
           entries={entries}
