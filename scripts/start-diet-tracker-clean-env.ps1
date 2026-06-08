@@ -40,6 +40,23 @@ function Test-PortListening {
   }
 }
 
+function Ensure-Dependencies {
+  $npmPath = (Get-Command npm.cmd -ErrorAction Stop).Source
+  Write-Host 'Installing dependencies with npm.cmd install...'
+  & $npmPath install
+}
+
+function Ensure-FrontendAssets {
+  $indexPath = Join-Path $repoRoot 'public/index.html'
+  if (Test-Path -LiteralPath $indexPath) {
+    return
+  }
+
+  $npmPath = (Get-Command npm.cmd -ErrorAction Stop).Source
+  Write-Host 'Frontend assets are missing. Building client into public/...'
+  & $npmPath run build
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
 
@@ -54,16 +71,24 @@ if (Test-PortListening -Port 3000) {
   exit 0
 }
 
-if ($Background) {
-  Start-Process `
-    -FilePath $nodePath `
-    -ArgumentList @('server/index.js') `
-    -WorkingDirectory $repoRoot `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $repoRoot 'server.log') `
-    -RedirectStandardError (Join-Path $repoRoot 'server.err.log')
+Ensure-Dependencies
+Ensure-FrontendAssets
 
-  Start-Sleep -Seconds 1
+if ($Background) {
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = 'cmd.exe'
+  $startInfo.Arguments = "/c start """" /min ""$nodePath"" ""server/index.js"""
+  $startInfo.WorkingDirectory = $repoRoot
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+
+  $serverProcess = [System.Diagnostics.Process]::Start($startInfo)
+  Start-Sleep -Seconds 3
+  if ($serverProcess.HasExited -and $serverProcess.ExitCode -ne 0) {
+    Write-Host "Diet tracker launch command exited with code $($serverProcess.ExitCode)."
+    exit 1
+  }
+
   if (Test-PortListening -Port 3000) {
     Write-Host 'Diet tracker started at http://127.0.0.1:3000'
     if ($OpenBrowser) {
