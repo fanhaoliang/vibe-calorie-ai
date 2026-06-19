@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { createConfiguredParser } from '../llmClient.js';
 import { sendJson } from './httpUtils.js';
 import { serveStatic } from './static.js';
+import { AppError } from '../errors.js';
 import { handleFoodEntryRoutes } from './routes/foodEntries.js';
 import { handleFoodItemRoutes } from './routes/foodItems.js';
 import { handleFoodAliasRoutes } from './routes/foodAliases.js';
@@ -45,7 +46,11 @@ export function createApp(repo, parser = createConfiguredParser(process.env, rep
 
       serveStatic(req, res);
     } catch (error) {
-      sendJson(res, 500, { error: { code: 'SERVER_ERROR', message: error.message } });
+      if (error instanceof AppError) {
+        sendJson(res, error.status, { error: { code: error.code, message: error.message } });
+      } else {
+        sendJson(res, 500, { error: { code: 'SERVER_ERROR', message: error.message } });
+      }
     }
   });
 }

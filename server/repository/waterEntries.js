@@ -1,5 +1,6 @@
 import { nowIso, normalizeRecordedAt } from './time.js';
 import { fromDbBool } from './mappers.js';
+import { AppError } from '../errors.js';
 
 /**
  * 独立饮水记录（source_type='manual'）+ 随文本记录的饮水查询。
@@ -33,7 +34,7 @@ export function createWaterEntriesModule(db, { statements, recomputeEntryTotal }
   // 删除随文本记录的饮水时同步重算主条目热量（饮水不计入热量，但 updated_at 要刷新）。
   function deleteWaterEntry(waterId) {
     const water = db.prepare('SELECT * FROM water_entries WHERE id = ?').get(waterId);
-    if (!water) throw new Error('Water entry not found');
+    if (!water) throw AppError.notFound('Water entry not found');
     db.prepare('DELETE FROM water_entries WHERE id = ?').run(waterId);
     if (water.entry_id) recomputeEntryTotal(water.entry_id);
     return { deleted: true, id: waterId };

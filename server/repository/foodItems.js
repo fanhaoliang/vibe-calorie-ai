@@ -1,6 +1,7 @@
 import { addRuntimeFoodAlias } from '../parser/foodLibrary.js';
 import { nowIso } from './time.js';
 import { normalizeAlias } from './aliasNormalize.js';
+import { AppError } from '../errors.js';
 
 /**
  * food_items 行级别的修改与删除。
@@ -13,7 +14,7 @@ import { normalizeAlias } from './aliasNormalize.js';
 export function createFoodItemsModule(db, { getFoodEntry, recomputeEntryTotal, recomputeEntryReview }) {
   function updateFoodItemCalories(itemId, calories, saveToFoodLibrary = false) {
     const item = db.prepare('SELECT * FROM food_items WHERE id = ?').get(itemId);
-    if (!item) throw new Error('Food item not found');
+    if (!item) throw AppError.notFound('Food item not found');
     const timestamp = nowIso();
     db.prepare('UPDATE food_items SET calories = ?, source = ?, need_review = 0, review_reason = ?, updated_at = ? WHERE id = ?').run(calories, 'user_edit', '', timestamp, itemId);
     const finalTotalCalories = recomputeEntryTotal(item.entry_id);
@@ -52,7 +53,7 @@ export function createFoodItemsModule(db, { getFoodEntry, recomputeEntryTotal, r
 
   function deleteFoodItem(itemId) {
     const item = db.prepare('SELECT * FROM food_items WHERE id = ?').get(itemId);
-    if (!item) throw new Error('Food item not found');
+    if (!item) throw AppError.notFound('Food item not found');
     db.prepare('DELETE FROM food_items WHERE id = ?').run(itemId);
     const entry = getFoodEntry(item.entry_id);
     if (!entry) return { deleted: true };

@@ -1,4 +1,5 @@
 import { resetRuntimeFoodAliases } from '../parser/foodLibrary.js';
+import { withTransaction } from './transaction.js';
 
 /**
  * 一键清空所有业务数据：
@@ -10,8 +11,7 @@ import { resetRuntimeFoodAliases } from '../parser/foodLibrary.js';
  */
 export function createClearAllModule(db) {
   function clearAllData() {
-    db.exec('BEGIN');
-    try {
+    return withTransaction(db, () => {
       db.prepare('DELETE FROM water_entries').run();
       db.prepare('DELETE FROM food_items').run();
       db.prepare('DELETE FROM food_entries').run();
@@ -24,12 +24,8 @@ export function createClearAllModule(db) {
         WHERE name IN ('water_entries', 'food_items', 'food_entries', 'weight_entries', 'food_aliases', 'foods')
       `).run();
       resetRuntimeFoodAliases();
-      db.exec('COMMIT');
       return { cleared: true };
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
+    });
   }
 
   return { clearAllData };

@@ -1,5 +1,7 @@
 import { nowIso, normalizeRecordedAt } from './time.js';
 import { toDbBool, fromDbBool, mapFoodItem, mapWaterItem } from './mappers.js';
+import { withTransaction } from './transaction.js';
+import { AppError } from '../errors.js';
 
 /**
  * food_entries 主表的全部 CRUD 与状态维护。
@@ -70,7 +72,7 @@ export function createFoodEntriesModule(db, { statements, learnFoodAlias }) {
 
   function confirmFoodEntry(entryId) {
     const entry = getFoodEntry(entryId);
-    if (!entry) throw new Error('Food entry not found');
+    if (!entry) throw AppError.notFound('Food entry not found');
     const timestamp = nowIso();
     db.prepare('UPDATE food_items SET need_review = 0, review_reason = ?, updated_at = ? WHERE entry_id = ?').run('', timestamp, entryId);
     db.prepare('UPDATE water_entries SET need_review = 0, review_reason = ?, updated_at = ? WHERE entry_id = ?').run('', timestamp, entryId);
@@ -81,8 +83,7 @@ export function createFoodEntriesModule(db, { statements, learnFoodAlias }) {
   function createFoodEntry(rawText, parsed, recordedAtInput) {
     const timestamp = nowIso();
     const recordedAt = normalizeRecordedAt(recordedAtInput, timestamp);
-    db.exec('BEGIN');
-    try {
+    return withTransaction(db, () => {
       const result = insertEntry.run(
         recordedAt,
         rawText,
@@ -132,12 +133,8 @@ export function createFoodEntriesModule(db, { statements, learnFoodAlias }) {
       }
 
       recomputeEntryTotal(entryId);
-      db.exec('COMMIT');
       return getFoodEntry(entryId);
-    } catch (error) {
-      db.exec('ROLLBACK');
-      throw error;
-    }
+    });
   }
 
   function getFoodEntriesByDate(date) {
@@ -166,7 +163,7 @@ export function createFoodEntriesModule(db, { statements, learnFoodAlias }) {
 
   function deleteFoodEntry(entryId) {
     const entry = getFoodEntry(entryId);
-    if (!entry) throw new Error('Food entry not found');
+    if (!entry) throw AppError.notFound('Food entry not found');
     db.prepare('DELETE FROM food_entries WHERE id = ?').run(entryId);
     return { deleted: true, id: entryId };
   }

@@ -93,3 +93,18 @@ export function logReadable(name, message, details = {}) {
   const line = `[${name}] ${timestamp} ${message}${data}`;
   writeLog(`${name}-readable`, line);
 }
+
+/**
+ * 复合事件：一次写出结构化 + 可读两条日志，避免调用方在两边重复传相同字段。
+ *
+ *   category   日志归类，作为文件名前缀（同 logStructured 的 name）
+ *   event      事件名，写入 structured 行
+ *   data       结构化数据
+ *   readable   {category, message} 可选，省略时不写可读日志
+ */
+export function logEvent({ category, event, data = {}, readable }) {
+  logStructured(category, event, data);
+  if (readable) {
+    logReadable(readable.category || 'llm', readable.message, data);
+  }
+}

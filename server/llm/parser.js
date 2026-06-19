@@ -57,13 +57,94 @@ function logJudgeStats(repo, modelAResult, modelBResult, judgeResult, result) {
 }
 
 /**
+ * 短输入快速通道：直接调单模型 + 规则兜底。
+ * 永远把结果标记 needReview=true，因为没有 A/B 校验也没有规则兜底之外的护栏。
+ */
+async function fastPathParse(text, modelA, modelB, timeoutMs, repo) {
+  const model = modelA || modelB;
+  const label = modelA ? 'LLM_A' : 'LLM_B';
+  logStructured('llm-fast', 'fast_path', { text, reason: 'short_input' });
+  try {
+    const result = await callOpenAICompatible(label, model, buildParsePrompt(text), timeoutMs);
+    const final = {
+      ...ruleBasedParse(text),
+      ...result,
+      parseSource: 'fast_path',
+      needReview: true,
+      reviewReason: '快速通道（短输入），建议确认'
+    };
+    if (repo?.logParseResult) {
+      repo.logParseResult(text, null, null, null, final, 'fast_path', null, null);
+    }
+    return final;
+  } catch {
+    return ruleBasedParse(text);
+  }
+}
+
+/**
+ * 把一个解析函数包装上缓存：相同文本只解析一次。
+ *   - 命中：直接返回缓存值
+ *   - 未命中：调原函数，结果写回缓存后返回
+ */
+function withCache(parse) {
+  return async (text, repo) => {
+    const cacheKey = hashText(text);
+    const cached = parseCache.get(cacheKey);
+    if (cached) {
+      logStructured('llm-cache', 'cache_hit', { cacheKey, stats: parseCache.getStats() });
+      return cached;
+    }
+    logStructured('llm-cache', 'cache_miss', { cacheKey, stats: parseCache.getStats() });
+
+    const result = await parse(text, repo);
+    parseCache.set(cacheKey, result);
+    return result;
+  };
+}
+
+/**
+ * 主解析路径：A/B 并行 + 裁判 + 校验，外加 judge_stats / parse_logs 落库。
+ * 闭包里捕获 modelAResult / modelBResult / judgeResult，等编排完成后做对比写入。
+ */
+function buildOrchestratedParser(modelA, modelB, modelC, timeoutMs) {
+  return async (text, repo) => {
+    let modelAResult = null;
+    let modelBResult = null;
+    let judgeResult = null;
+
+    const result = await parseWithModels(text, {
+      callModelA: modelA ? async () => {
+        modelAResult = await callOpenAICompatible('LLM_A', modelA, buildParsePrompt(text), timeoutMs);
+        return modelAResult;
+      } : undefined,
+      callModelB: modelB ? async () => {
+        modelBResult = await callOpenAICompatible('LLM_B', modelB, buildParsePrompt(text), timeoutMs);
+        return modelBResult;
+      } : undefined,
+      callJudgeModel: modelC ? async (_text, diffInfo) => {
+        judgeResult = await callOpenAICompatible('LLM_C', modelC, buildJudgePrompt(text, diffInfo), timeoutMs);
+        return judgeResult;
+      } : undefined,
+      onDecision: createDecisionLogger(modelA, modelB)
+    });
+
+    if (repo?.logParseResult) {
+      logJudgeStats(repo, modelAResult, modelBResult, judgeResult, result);
+      repo.logParseResult(text, modelAResult, modelBResult, judgeResult, result, result.parseSource || 'unknown', null, null);
+    }
+
+    return result;
+  };
+}
+
+/**
  * 创建配置好的 parser：根据 .env 中的模型配置决定走哪条路径。
  *
  *   - 无任何 LLM 配置 → 永远走 ruleBasedParse 本地规则
  *   - 有 A/B（或其一） → 多模型 + 规则兜底
- *     - 短输入 + LLM_FAST_PATH=true → 走单模型快速通道，结果标记需确认
- *     - 否则查 parseCache，未命中时调用 parseWithModels 编排
- *     - 调用完毕后把缓存写回、把统计 / parse_logs 写到 repo
+ *     - 短输入 + LLM_FAST_PATH=true → fastPathParse
+ *     - 否则 → withCache(buildOrchestratedParser)
  */
 export function createConfiguredParser(env = process.env) {
   const modelA = getModelConfig(env, 'LLM_A');
@@ -86,67 +167,14 @@ export function createConfiguredParser(env = process.env) {
   }
 
   logStructured('llm-config', 'parser_mode', { mode: 'llm_with_rule_fallback' });
+
+  const fastPathEnabled = env.LLM_FAST_PATH === 'true';
+  const orchestrated = withCache(buildOrchestratedParser(modelA, modelB, modelC, timeoutMs));
+
   return async (text, repo) => {
-    // 快速通道：短输入直接走单模型
-    const fastPathEnabled = env.LLM_FAST_PATH === 'true';
     if (fastPathEnabled && isShortInput(text)) {
-      logStructured('llm-fast', 'fast_path', { text, reason: 'short_input' });
-      const model = modelA || modelB;
-      const label = modelA ? 'LLM_A' : 'LLM_B';
-      try {
-        const result = await callOpenAICompatible(label, model, buildParsePrompt(text), timeoutMs);
-        const final = {
-          ...ruleBasedParse(text),
-          ...result,
-          parseSource: 'fast_path',
-          needReview: true,
-          reviewReason: '快速通道（短输入），建议确认'
-        };
-        if (repo?.logParseResult) {
-          repo.logParseResult(text, null, null, null, final, 'fast_path', null, null);
-        }
-        return final;
-      } catch {
-        return ruleBasedParse(text);
-      }
+      return fastPathParse(text, modelA, modelB, timeoutMs, repo);
     }
-
-    const cacheKey = hashText(text);
-    const cached = parseCache.get(cacheKey);
-    if (cached) {
-      logStructured('llm-cache', 'cache_hit', { cacheKey, stats: parseCache.getStats() });
-      return cached;
-    }
-    logStructured('llm-cache', 'cache_miss', { cacheKey, stats: parseCache.getStats() });
-
-    // 这三个变量在闭包里被 callXxx 写入，便于完成后做 judge_stats 比对
-    let modelAResult = null;
-    let modelBResult = null;
-    let judgeResult = null;
-
-    const result = await parseWithModels(text, {
-      callModelA: modelA ? async () => {
-        modelAResult = await callOpenAICompatible('LLM_A', modelA, buildParsePrompt(text), timeoutMs);
-        return modelAResult;
-      } : undefined,
-      callModelB: modelB ? async () => {
-        modelBResult = await callOpenAICompatible('LLM_B', modelB, buildParsePrompt(text), timeoutMs);
-        return modelBResult;
-      } : undefined,
-      callJudgeModel: modelC ? async (_text, diffInfo) => {
-        judgeResult = await callOpenAICompatible('LLM_C', modelC, buildJudgePrompt(text, diffInfo), timeoutMs);
-        return judgeResult;
-      } : undefined,
-      onDecision: createDecisionLogger(modelA, modelB)
-    });
-
-    parseCache.set(cacheKey, result);
-
-    if (repo?.logParseResult) {
-      logJudgeStats(repo, modelAResult, modelBResult, judgeResult, result);
-      repo.logParseResult(text, modelAResult, modelBResult, judgeResult, result, result.parseSource || 'unknown', null, null);
-    }
-
-    return result;
+    return orchestrated(text, repo);
   };
 }

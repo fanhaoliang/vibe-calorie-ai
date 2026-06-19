@@ -23,27 +23,8 @@ export function compareFinalCalories(modelA, modelB) {
   };
 }
 
-/**
- * 多模型解析主编排入口。
- *
- * 流程：
- *   1. A/B 并行调用 Promise.allSettled + validateModelPayload
- *   2. 两者失败 → ruleBasedParse 兜底
- *   3. 单模型成功 → markAllNeedReview
- *   4. 双模型成功 → buildDiffResult 差异分析
- *   5. 共识 → 直接返回 A+B mergedResult
- *   6. 分歧 + 无裁判 → merge + markAllNeedReview
- *   7. 分歧 + 有裁判 → 调 judge → validateJudgeResult
- *   8. SUCCESS → 采用裁判；FALLBACK → 回退 merge；REVIEW → 采用裁判 + needReview
- *
- * options:
- *   callModelA(text)   async, 返回 LLM A 的解析结果
- *   callModelB(text)   async, 返回 LLM B 的解析结果
- *   callJudgeModel(text, diffInfo)  async, 返回裁判解析结果
- *   onDecision(event)  callback, 每次关键决策的日志记录点
- */
-export async function parseWithModels(text, options = {}) {
-  // --- 第一轮：A 和 B 并行解析 ---
+// === Stage 1：A/B 并行解析 ===
+async function resolveModelOutputs(text, options) {
   const [rawA, rawB] = await Promise.allSettled([
     options.callModelA?.(text),
     options.callModelB?.(text)
@@ -62,32 +43,34 @@ export async function parseWithModels(text, options = {}) {
     modelB_cal: modelB?.totalCalories ?? 0
   });
 
-  // 两者都失败 → 规则兜底
-  if (!hasContent(modelA) && !hasContent(modelB)) {
-    options.onDecision?.({ type: 'rule_fallback' });
-    return {
-      ...ruleBasedParse(text),
-      parseSource: 'rule_fallback'
-    };
-  }
+  return { modelA, modelB };
+}
 
-  // 只有一个成功 → 单模型回退
-  if (!hasContent(modelA) || !hasContent(modelB)) {
-    const selected = hasContent(modelA) ? modelA : modelB;
-    const selectedModel = hasContent(modelA) ? 'A' : 'B';
-    const parseSource = modelA?.parseStatus === 'empty' || modelB?.parseStatus === 'empty'
-      ? 'single_model_effective'
-      : 'single_model_fallback';
-    options.onDecision?.({ type: parseSource, selected: selectedModel });
-    return markAllNeedReview(
-      finalize(selected, parseSource),
-      parseSource === 'single_model_effective'
-        ? '仅一个模型识别到内容，建议确认'
-        : '仅一个模型解析成功，建议确认'
-    );
-  }
+function bothFailedFallback(text, options) {
+  options.onDecision?.({ type: 'rule_fallback' });
+  return {
+    ...ruleBasedParse(text),
+    parseSource: 'rule_fallback'
+  };
+}
 
-  // --- 差异分析 ---
+function singleModelFallback(modelA, modelB, options) {
+  const selected = hasContent(modelA) ? modelA : modelB;
+  const selectedModel = hasContent(modelA) ? 'A' : 'B';
+  const parseSource = modelA?.parseStatus === 'empty' || modelB?.parseStatus === 'empty'
+    ? 'single_model_effective'
+    : 'single_model_fallback';
+  options.onDecision?.({ type: parseSource, selected: selectedModel });
+  return markAllNeedReview(
+    finalize(selected, parseSource),
+    parseSource === 'single_model_effective'
+      ? '仅一个模型识别到内容，建议确认'
+      : '仅一个模型解析成功，建议确认'
+  );
+}
+
+// === Stage 2：差异分析 ===
+function analyzeDiff(modelA, modelB, options) {
   const aCovered = finalize(modelA, 'model_a');
   const bCovered = finalize(modelB, 'model_b');
   const diff = buildDiffResult(aCovered, bCovered);
@@ -107,22 +90,25 @@ export async function parseWithModels(text, options = {}) {
     onlyInB: diff.onlyInB
   });
 
-  // 共识直接返回
-  if (diff.consensus) {
-    options.onDecision?.({
-      type: 'consensus',
-      foodOverlap: diff.foodOverlap,
-      foodCountDiff: diff.foodCountDiff
-    });
-    const merged = finalize(diff.mergedResult, 'consensus');
-    return {
-      ...merged,
-      needReview: false,
-      reviewReason: ''
-    };
-  }
+  return { aCovered, bCovered, diff };
+}
 
-  // --- 有分歧，进入第二层：裁判 ---
+function consensusResult(diff, options) {
+  options.onDecision?.({
+    type: 'consensus',
+    foodOverlap: diff.foodOverlap,
+    foodCountDiff: diff.foodCountDiff
+  });
+  const merged = finalize(diff.mergedResult, 'consensus');
+  return {
+    ...merged,
+    needReview: false,
+    reviewReason: ''
+  };
+}
+
+// === Stage 3：裁判 + 验证 ===
+async function resolveJudge(text, diff, aCovered, bCovered, options) {
   if (!options.callJudgeModel) {
     options.onDecision?.({
       type: 'no_judge_fallback',
@@ -144,7 +130,6 @@ export async function parseWithModels(text, options = {}) {
     onlyInB: diff.onlyInB
   });
 
-  // 裁判只接收食物名称，不接收热量
   const judgeRaw = await options.callJudgeModel(text, {
     foodNamesA: diff.foodNamesA,
     foodNamesB: diff.foodNamesB,
@@ -160,7 +145,6 @@ export async function parseWithModels(text, options = {}) {
   });
 
   const judgeResult = validateModelPayload(judgeRaw);
-
   if (!judgeResult) {
     options.onDecision?.({ type: 'judge_parse_failed' });
     return markAllNeedReview(
@@ -169,7 +153,6 @@ export async function parseWithModels(text, options = {}) {
     );
   }
 
-  // --- 第三轮：校验裁判结果 ---
   const judgeCovered = {
     ...finalize(judgeResult, 'judge_model_candidate'),
     _originalText: text
@@ -221,4 +204,32 @@ export async function parseWithModels(text, options = {}) {
     finalize(judgeCovered, 'judge_review'),
     `裁判结果需确认：${validation.allReasons.join('；')}`
   );
+}
+
+/**
+ * 多模型解析主编排：把决策分成三段顺序执行：
+ *
+ *   1. resolveModelOutputs  并行调 A/B
+ *   2. analyzeDiff          找共识
+ *   3. resolveJudge         有分歧时进入裁判 + 校验
+ *
+ * 中间分别有规则兜底、单模型兜底、共识返回三个早退分支。
+ */
+export async function parseWithModels(text, options = {}) {
+  const { modelA, modelB } = await resolveModelOutputs(text, options);
+
+  if (!hasContent(modelA) && !hasContent(modelB)) {
+    return bothFailedFallback(text, options);
+  }
+  if (!hasContent(modelA) || !hasContent(modelB)) {
+    return singleModelFallback(modelA, modelB, options);
+  }
+
+  const { aCovered, bCovered, diff } = analyzeDiff(modelA, modelB, options);
+
+  if (diff.consensus) {
+    return consensusResult(diff, options);
+  }
+
+  return resolveJudge(text, diff, aCovered, bCovered, options);
 }

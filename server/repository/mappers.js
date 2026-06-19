@@ -1,14 +1,27 @@
+// @ts-check
 // SQLite 行 → 业务对象的转换。
 // SQLite 用 INTEGER 0/1 表示布尔，业务层用 true/false。
 
+/**
+ * @param {unknown} value
+ * @returns {0 | 1}
+ */
 export function toDbBool(value) {
   return value ? 1 : 0;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
 export function fromDbBool(value) {
   return Boolean(value);
 }
 
+/**
+ * @param {Record<string, any>} row
+ * @returns {import('../contracts.js').FoodItem & { rawText: string, source: string }}
+ */
 export function mapFoodItem(row) {
   return {
     id: row.id,
@@ -24,6 +37,10 @@ export function mapFoodItem(row) {
   };
 }
 
+/**
+ * @param {Record<string, any>} row
+ * @returns {import('../contracts.js').WaterItem}
+ */
 export function mapWaterItem(row) {
   return {
     id: row.id,
@@ -35,6 +52,9 @@ export function mapWaterItem(row) {
   };
 }
 
+/**
+ * @param {Record<string, any>} row
+ */
 export function mapWeightEntry(row) {
   return {
     id: row.id,
@@ -46,6 +66,9 @@ export function mapWeightEntry(row) {
 
 // 同一天可以保存多条体重记录，weight_entries 查询会用 AVG(weight_kg)；
 // 这里负责把 AVG 结果保留一位小数，并对 null 做兼容。
+/**
+ * @param {Record<string, any>} row
+ */
 export function mapWeightAverage(row) {
   return {
     id: row.id,

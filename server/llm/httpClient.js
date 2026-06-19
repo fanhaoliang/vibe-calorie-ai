@@ -1,4 +1,4 @@
-import { logStructured, logReadable } from '../logger.js';
+import { logStructured, logEvent } from '../logger.js';
 import { globalRateLimiter } from './rateLimiter.js';
 import { getCircuitBreaker } from './circuitBreaker.js';
 import { buildRequestBody, getModelDisplayName } from './modelConfig.js';
@@ -104,15 +104,13 @@ export async function callOpenAICompatible(label, config, prompt, timeoutMs = 50
         if (!response.ok) {
           const responseBody = await readErrorBody(response);
           const durationMs = Date.now() - startedAt;
-          logStructured('llm-request', 'request_failed', {
-            label,
-            status: response.status,
-            durationMs,
-            responseBody,
-            attempt
-          });
-          logReadable('llm', `${modelName} 请求失败：HTTP ${response.status}，耗时 ${formatSeconds(durationMs)} 秒`, {
-            label, model: config.model, status: response.status, responseBody
+          logEvent({
+            category: 'llm-request',
+            event: 'request_failed',
+            data: { label, status: response.status, durationMs, responseBody, attempt },
+            readable: {
+              message: `${modelName} 请求失败：HTTP ${response.status}，耗时 ${formatSeconds(durationMs)} 秒`
+            }
           });
           throw new Error(`LLM request failed: ${response.status}${responseBody ? ` ${responseBody}` : ''}`);
         }
@@ -121,20 +119,21 @@ export async function callOpenAICompatible(label, config, prompt, timeoutMs = 50
         const result = extractJsonObject(payload.choices?.[0]?.message?.content);
         const durationMs = Date.now() - startedAt;
 
-        logStructured('llm-request', 'request_success', {
-          label,
-          durationMs,
-          parseStatus: result?.parseStatus,
-          foodItems: result?.foodItems?.length ?? 0,
-          waterItems: result?.waterItems?.length ?? 0,
-          totalCalories: result?.totalCalories,
-          attempt
-        });
-        logReadable('llm', `${modelName} 解析成功：耗时 ${formatSeconds(durationMs)} 秒，识别 ${result?.foodItems?.length ?? 0} 个食物、${result?.waterItems?.length ?? 0} 个饮水，总热量 ${result?.totalCalories ?? 0} kcal，状态：${formatStatus(result?.parseStatus)}`, {
-          label, model: config.model, parseStatus: result?.parseStatus,
-          foodItems: result?.foodItems?.length ?? 0,
-          waterItems: result?.waterItems?.length ?? 0,
-          totalCalories: result?.totalCalories
+        logEvent({
+          category: 'llm-request',
+          event: 'request_success',
+          data: {
+            label,
+            durationMs,
+            parseStatus: result?.parseStatus,
+            foodItems: result?.foodItems?.length ?? 0,
+            waterItems: result?.waterItems?.length ?? 0,
+            totalCalories: result?.totalCalories,
+            attempt
+          },
+          readable: {
+            message: `${modelName} 解析成功：耗时 ${formatSeconds(durationMs)} 秒，识别 ${result?.foodItems?.length ?? 0} 个食物、${result?.waterItems?.length ?? 0} 个饮水，总热量 ${result?.totalCalories ?? 0} kcal，状态：${formatStatus(result?.parseStatus)}`
+          }
         });
 
         return result;
@@ -143,18 +142,14 @@ export async function callOpenAICompatible(label, config, prompt, timeoutMs = 50
         const durationMs = Date.now() - startedAt;
         const isTimeout = error.name === 'AbortError';
 
-        logStructured('llm-request', 'request_error', {
-          label,
-          durationMs,
-          error: isTimeout ? 'timeout' : error.message,
-          attempt
+        logEvent({
+          category: 'llm-request',
+          event: 'request_error',
+          data: { label, durationMs, error: isTimeout ? 'timeout' : error.message, attempt },
+          readable: isTimeout ? {
+            message: `${modelName} 解析超时：超过 ${formatSeconds(timeoutMs)} 秒未返回，本次不会采用它的结果`
+          } : undefined
         });
-
-        if (isTimeout) {
-          logReadable('llm', `${modelName} 解析超时：超过 ${formatSeconds(timeoutMs)} 秒未返回，本次不会采用它的结果`, {
-            label, model: config.model, timeoutMs, attempt
-          });
-        }
 
         if (attempt < maxRetries) continue;
         throw lastError;
