@@ -20,6 +20,7 @@ export function useFoodEntry(opts: {
   setMessage: (msg: string) => void;
   refresh: RefreshFn;
   onAfterSubmitDate: (date: string) => void;
+  showToast: (message: string, options?: { duration?: number }) => number;
 }) {
   const [foodText, setFoodText] = useState('');
   const [resultEntry, setResultEntry] = useState<FoodEntryDraft | null>(null);
@@ -51,11 +52,11 @@ export function useFoodEntry(opts: {
     }
   }, [foodText, opts]);
 
-  const updateDraftFoodName = useCallback(async (index: number, name: string) => {
+  const updateDraftFoodItem = useCallback(async (index: number, patch: Partial<{ name: string; quantity: number; unit: string }>) => {
     if (!resultEntry) return;
     const nextDraft = {
       ...resultEntry,
-      foodItems: resultEntry.foodItems.map((item, itemIndex) => itemIndex === index ? { ...item, name } : item)
+      foodItems: resultEntry.foodItems.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item)
     };
     setResultEntry(nextDraft);
 
@@ -92,7 +93,7 @@ export function useFoodEntry(opts: {
       setResultEntry(null);
       opts.onAfterSubmitDate(recordDate);
       await opts.refresh(recordDate);
-      opts.setMessage('已保存，并记住这次识别');
+      opts.showToast('已保存');
     } catch (error) {
       opts.setMessage(error instanceof Error ? error.message : '保存失败');
     } finally {
@@ -100,5 +101,5 @@ export function useFoodEntry(opts: {
     }
   }, [resultEntry, opts]);
 
-  return { foodText, setFoodText, resultEntry, setResultEntry, submitFood, updateDraftFoodName, saveDraftEntry };
+  return { foodText, setFoodText, resultEntry, setResultEntry, submitFood, updateDraftFoodItem, saveDraftEntry };
 }

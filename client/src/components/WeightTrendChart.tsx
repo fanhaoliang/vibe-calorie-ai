@@ -72,7 +72,7 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
           {
             label: '体重 kg',
             data: filledData,
-            borderColor: '#6f8e77',
+            borderColor: '#2e8b8b',
             backgroundColor: 'rgba(111,142,119,0.14)',
             borderWidth: 2,
             borderDash: [4, 4],
@@ -85,8 +85,8 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
           {
             label: '实测体重 kg',
             data: realData,
-            borderColor: '#6f8e77',
-            backgroundColor: '#6f8e77',
+            borderColor: '#2e8b8b',
+            backgroundColor: '#2e8b8b',
             borderWidth: 2,
             fill: false,
             tension: 0.35,
@@ -106,7 +106,7 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
             labels: {
               boxWidth: 10,
               boxHeight: 10,
-              color: '#596159',
+              color: '#4a5860',
               usePointStyle: true
             }
           },
@@ -119,7 +119,7 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
                 return filled[idx]?.date ?? '';
               },
               label(context) {
-                const idx = context[0].dataIndex;
+                const idx = context.dataIndex;
                 const isReal = filled[idx]?.isReal ?? false;
                 const value = Number(context.parsed.y);
                 return `${isReal ? '体重' : '估算体重'}: ${value.toFixed(1)} kg`;
@@ -131,7 +131,7 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
           x: {
             grid: { display: false },
             ticks: {
-              color: '#8a8f86',
+              color: '#8a949b',
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 9
@@ -141,7 +141,7 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
             beginAtZero: false,
             grid: { color: 'rgba(125,134,123,0.14)' },
             ticks: {
-              color: '#6f8e77',
+              color: '#2e8b8b',
               callback: (value) => `${Number(value).toFixed(1)} kg`
             }
           }
@@ -156,7 +156,7 @@ export default function WeightTrendChart({ points }: { points: WeightPoint[] }) 
     <div className="relative h-[260px]">
       <canvas ref={canvasRef} />
       {!hasAnyData && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[#7d8279]">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[#8a949b]">
           选择时间范围后，体重趋势会在这里呈现。
         </div>
       )}

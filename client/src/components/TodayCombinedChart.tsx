@@ -39,7 +39,7 @@ export default function TodayCombinedChart({ points }: { points: ChartPoint[] })
           {
             label: '热量 kcal',
             data: points.map((point) => point.isAnchor || point.hasKcal ? point.kcal : null),
-            borderColor: '#6f8e77',
+            borderColor: '#2e8b8b',
             backgroundColor: 'rgba(111,142,119,0.14)',
             borderWidth: 2,
             fill: true,
@@ -72,7 +72,7 @@ export default function TodayCombinedChart({ points }: { points: ChartPoint[] })
             labels: {
               boxWidth: 10,
               boxHeight: 10,
-              color: '#596159',
+              color: '#4a5860',
               usePointStyle: true
             }
           },
@@ -82,7 +82,7 @@ export default function TodayCombinedChart({ points }: { points: ChartPoint[] })
           x: {
             grid: { display: false },
             ticks: {
-              color: '#8a8f86',
+              color: '#8a949b',
               maxRotation: 0,
               autoSkip: true,
               includeBounds: true,
@@ -92,7 +92,7 @@ export default function TodayCombinedChart({ points }: { points: ChartPoint[] })
           kcal: {
             beginAtZero: true,
             grid: { color: 'rgba(125,134,123,0.14)' },
-            ticks: { color: '#6f8e77', callback: (value) => `${value} kcal` }
+            ticks: { color: '#2e8b8b', callback: (value) => `${value} kcal` }
           },
           water: {
             beginAtZero: true,
@@ -111,8 +111,8 @@ export default function TodayCombinedChart({ points }: { points: ChartPoint[] })
     <div className="relative h-[260px]">
       <canvas ref={canvasRef} />
       {!hasData && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[#7d8279]">
-          记录第一餐或先喝一杯水，曲线就会开始动起来。
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[#a8b1b6]">
+          还没有记录
         </div>
       )}
     </div>

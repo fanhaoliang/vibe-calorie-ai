@@ -1,18 +1,23 @@
 import { useCallback } from 'react';
 import { api } from '../api';
+import type { FoodEntry, FoodEntryDraft } from '../types';
 
 type RefreshFn = (date: string) => Promise<{ weightKg?: number }>;
+type ToastShow = (message: string, options?: { undo?: () => void | Promise<void>; duration?: number }) => number;
 
 /**
- * 保存体重 + 删除饮食记录 + 一键重置。
+ * 保存体重 + 删除饮食记录。
  *
- * 三个写操作都比较轻，集中放在一个 hook 里，避免散落到太多文件。
+ * 删除走"立即生效 + toast 撤销"模式：不再用 confirm 弹窗。
+ * 撤销时把原 entry 通过 POST /api/food-entries 带 parsed 重建一条新记录，
+ * id 会变（以 entry.id+timestamp 为新 id），但内容和热量等价。
  */
 export function useMutations(opts: {
   recordedAtNow: () => string;
   setMessage: (msg: string) => void;
   refresh: RefreshFn;
   onAfterSubmitDate: (date: string) => void;
+  showToast: ToastShow;
 }) {
   const saveWeight = useCallback(async (weightKg: number) => {
     if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 250) {
@@ -34,16 +39,47 @@ export function useMutations(opts: {
     }
   }, [opts]);
 
-  const deleteFoodEntry = useCallback(async (entryId: number, currentDate: string) => {
-    if (!window.confirm('删除整条饮食记录？这条记录里的食物和随文本记录的水都会删除。')) return;
+  const deleteFoodEntry = useCallback(async (entry: FoodEntry, currentDate: string) => {
     opts.setMessage('');
     try {
-      await api(`/api/food-entries/${entryId}`, { method: 'DELETE' });
+      await api(`/api/food-entries/${entry.id}`, { method: 'DELETE' });
       await opts.refresh(currentDate);
+      opts.showToast(`已删除 "${truncate(entry.rawText)}"`, {
+        undo: async () => {
+          const draft: FoodEntryDraft = {
+            recordedAt: entry.recordedAt,
+            rawText: entry.rawText,
+            parseSource: entry.parseSource ?? 'manual',
+            parseStatus: entry.parseStatus ?? 'success',
+            llmTotalCalories: entry.llmTotalCalories ?? entry.finalTotalCalories,
+            finalTotalCalories: entry.finalTotalCalories,
+            totalCalories: entry.finalTotalCalories,
+            needReview: entry.needReview,
+            reviewReason: entry.reviewReason,
+            ignoredItems: entry.ignoredItems ?? [],
+            foodItems: entry.foodItems,
+            waterItems: entry.waterItems
+          } as FoodEntryDraft;
+          await api('/api/food-entries', {
+            method: 'POST',
+            body: JSON.stringify({
+              text: entry.rawText,
+              recordedAt: entry.recordedAt,
+              parsed: draft
+            })
+          });
+          await opts.refresh(currentDate);
+        }
+      });
     } catch (error) {
       opts.setMessage(error instanceof Error ? error.message : '删除失败');
     }
   }, [opts]);
 
   return { saveWeight, deleteFoodEntry };
+}
+
+function truncate(text: string, max = 14) {
+  const s = text.replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }

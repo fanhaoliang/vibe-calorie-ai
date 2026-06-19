@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react';
 import { api } from '../api';
+import type { WaterEntry } from '../types';
 
 type RefreshFn = (date: string) => Promise<{ weightKg?: number }>;
+type ToastShow = (message: string, options?: { undo?: () => void | Promise<void>; duration?: number }) => number;
 
 /**
  * 饮水相关操作：快捷加水、自定义提交、删除记录。
  *
- * 持有自定义饮水输入框的 waterAmount。
- * submitting 由调用方管理（与饮食提交共享同一个锁）。
+ * 删除走"立即生效 + toast 撤销"：不弹 confirm，撤销时 POST 重建一条饮水。
  */
 export function useWaterActions(opts: {
   recordedAtNow: () => string;
@@ -16,6 +17,8 @@ export function useWaterActions(opts: {
   setMessage: (msg: string) => void;
   refresh: RefreshFn;
   onAfterSubmitDate: (date: string) => void;
+  showToast: ToastShow;
+  getWaterById: (id: number) => WaterEntry | undefined;
 }) {
   const [waterAmount, setWaterAmount] = useState('');
 
@@ -45,11 +48,26 @@ export function useWaterActions(opts: {
   }, [waterAmount, quickWater]);
 
   const deleteWaterEntry = useCallback(async (waterId: number, currentDate: string) => {
-    if (!window.confirm('删除这条饮水记录？')) return;
+    const target = opts.getWaterById(waterId);
     opts.setMessage('');
     try {
       await api(`/api/water-entries/${waterId}`, { method: 'DELETE' });
       await opts.refresh(currentDate);
+      if (target) {
+        opts.showToast(`已删除 ${target.amountMl} ml`, {
+          undo: async () => {
+            await api('/api/water-entries', {
+              method: 'POST',
+              body: JSON.stringify({
+                amountMl: target.amountMl,
+                rawText: target.rawText,
+                recordedAt: target.recordedAt
+              })
+            });
+            await opts.refresh(currentDate);
+          }
+        });
+      }
     } catch (error) {
       opts.setMessage(error instanceof Error ? error.message : '删除失败');
     }

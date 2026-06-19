@@ -1,3 +1,6 @@
+// HTTP API 出参 / 进参的形状。
+// 与 server/contracts.js 中的 JSDoc typedef 保持一致；任何字段调整需要两边同步。
+
 export type Summary = {
   date: string;
   totalCalories: number;
@@ -30,9 +33,13 @@ export type FoodEntry = {
   id: number;
   recordedAt: string;
   rawText: string;
+  parseSource?: string;
+  parseStatus?: string;
+  llmTotalCalories?: number;
   finalTotalCalories: number;
   needReview: boolean;
   reviewReason: string;
+  ignoredItems?: string[];
   foodItems: FoodItem[];
   waterItems: WaterItem[];
 };

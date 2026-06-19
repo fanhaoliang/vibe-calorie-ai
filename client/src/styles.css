@@ -1,8 +1,34 @@
 @import "tailwindcss";
 
+/*
+ * 配色 token：晨雾 + 莓果粉
+ *   --bg-base       页面底色，蓝灰偏暖
+ *   --accent        主色（蓝绿色 teal），用于焦点/进度/确认按钮
+ *   --accent-soft   主色的弱化背景，用于 chip/标签
+ *   --berry         莓果粉，用于警示/超量/红色 CTA
+ *   --honey         琥珀金，用于饮水
+ *   --ink-strong    主文字（深石板蓝）
+ *   --ink           次文字
+ *   --ink-soft      弱文字
+ *   --line          分隔线
+ */
 :root {
-  color: #2f342f;
-  background: #f8f5ee;
+  --bg-base:      #eef2f3;
+  --bg-tint-a:    #d8e7e6;
+  --bg-tint-b:    #f3e1e6;
+  --accent:       #2e8b8b;
+  --accent-deep:  #1f6b6b;
+  --accent-soft:  #d3ebe7;
+  --berry:        #c14b6e;
+  --berry-soft:   #f3dde3;
+  --honey:        #d99348;
+  --honey-soft:   #f6e5cb;
+  --ink-strong:   #1d2a30;
+  --ink:          #4a5860;
+  --ink-soft:     #8a949b;
+  --line:         #d6dde0;
+  color: var(--ink-strong);
+  background: var(--bg-base);
   font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -34,6 +60,7 @@ button {
   cursor: pointer;
 }
 
+/* ===== 动效定义 ===== */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -55,6 +82,86 @@ button {
   }
 }
 
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2%, -1.5%, 0) scale(1.05); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes aurora-drift-2 {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-2.5%, 2%, 0) scale(1.08); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 87, 69, 0.45); }
+  50%      { box-shadow: 0 0 0 12px rgba(217, 87, 69, 0); }
+}
+
+@keyframes badge-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(126, 154, 134, 0.0); }
+  50%      { box-shadow: 0 0 18px 0 rgba(126, 154, 134, 0.35); }
+}
+
+@keyframes live-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(149, 220, 136, 0.55);
+  }
+  50% {
+    opacity: 0.45;
+    box-shadow: 0 0 0 6px rgba(149, 220, 136, 0);
+  }
+}
+
+/* ===== 燃烧卡路里 loader ===== */
+@keyframes burn-flicker {
+  0%, 100% {
+    transform: translate(-50%, 0) scale(1, 1);
+    filter: hue-rotate(0deg) brightness(1);
+  }
+  25% {
+    transform: translate(-50%, -2px) scale(0.92, 1.08);
+    filter: hue-rotate(-6deg) brightness(1.08);
+  }
+  50% {
+    transform: translate(-50%, 0) scale(1.05, 0.96);
+    filter: hue-rotate(4deg) brightness(0.95);
+  }
+  75% {
+    transform: translate(-50%, -1px) scale(0.95, 1.05);
+    filter: hue-rotate(-2deg) brightness(1.04);
+  }
+}
+
+@keyframes burn-spark-rise {
+  0% {
+    opacity: 0;
+    transform: translate(var(--sx, 0), 0) scale(0.6);
+  }
+  10% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(var(--ex, 0), -56px) scale(0.2);
+  }
+}
+
+@keyframes burn-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 通用工具类 ===== */
 .btn-spinner {
   width: 16px;
   height: 16px;
@@ -73,6 +180,390 @@ button {
   animation: modal-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.fade-up {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 主背景的多层光斑：position:fixed 由消费方决定，这里只提供视觉。
+   每个层用伪元素错位旋转，并用 aurora-drift 缓慢漂移。 */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(46, 139, 139, 0.18), transparent 38%),
+    radial-gradient(circle at 88% 14%, rgba(193, 75, 110, 0.14), transparent 32%),
+    radial-gradient(circle at 50% 92%, rgba(46, 139, 139, 0.10), transparent 40%),
+    linear-gradient(180deg, #f4f7f7 0%, #e7eef0 100%);
+}
+
+.aurora-bg::before,
+.aurora-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.7;
+  will-change: transform;
+}
+
+.aurora-bg::before {
+  top: -8%;
+  left: -6%;
+  width: 38vw;
+  height: 38vw;
+  background: radial-gradient(circle, rgba(46, 139, 139, 0.28), transparent 70%);
+  animation: aurora-drift 18s ease-in-out infinite;
+}
+
+.aurora-bg::after {
+  bottom: -10%;
+  right: -8%;
+  width: 42vw;
+  height: 42vw;
+  background: radial-gradient(circle, rgba(193, 75, 110, 0.22), transparent 70%);
+  animation: aurora-drift-2 24s ease-in-out infinite;
+}
+
+/* 极细噪点叠层，让背景不那么"塑料"。 */
+.aurora-noise {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+}
+
+/* 进度条流光：父级需要 overflow:hidden，子级用此类 */
+.progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.progress-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%);
+  transform: translateX(-120%);
+  animation: shimmer 2.4s ease-in-out infinite;
+}
+
+/* 警示状态用柔脉冲 */
+.warn-pulse {
+  animation: pulse-soft 2.2s ease-in-out infinite;
+}
+
+/* chip 微发光（hover 时触发） */
+.glow-on-hover {
+  transition: box-shadow 0.4s ease, transform 0.2s ease;
+}
+.glow-on-hover:hover {
+  animation: badge-glow 1.6s ease-in-out infinite;
+  transform: translateY(-1px);
+}
+
+/* 玻璃感卡片 */
+.glass-card {
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 70px rgba(29, 42, 48, 0.10);
+}
+
+/* 选中 Pill 增强 */
+.pill-active {
+  background: linear-gradient(135deg, #3aa39e 0%, var(--accent-deep) 100%);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(31, 107, 107, 0.30);
+}
+
+/* 实时心跳点：1Hz 缩放 + 透明度，告诉用户"这里是当下时间" */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #95dc88;
+  animation: live-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ===== 时钟+重置 复合卡片 =====
+ * 一个外壳里左侧时钟、右侧 icon-only reset，中间 1px 分隔线。
+ * 颜色用 accent（teal）渐变到 berry（莓果），呼应整体配色。
+ */
+@keyframes clock-colon-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0.18; }
+}
+
+.clock-cluster {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  height: 92px;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.10), transparent 55%),
+    linear-gradient(135deg, #244e52 0%, #1d3b46 55%, #3b2a36 100%);
+  color: #fff;
+  box-shadow:
+    0 22px 50px rgba(20, 37, 44, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.clock-cluster:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 28px 60px rgba(20, 37, 44, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.clock-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 18px 0 20px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+/* 重置按钮：作为 cluster 内部的 icon-only 区，左侧用极细分隔线与时钟分开 */
+.reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 200, 215, 0.72);
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  box-shadow: none;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.reset-btn:hover {
+  color: #ffd0db;
+  background: rgba(193, 75, 110, 0.18);
+}
+.reset-btn:active { background: rgba(193, 75, 110, 0.28); }
+.reset-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* flatpickr 输入框：透明覆盖整个卡片，只用来响应点击/接收新值；内容由 clock-card__face 显示 */
+.clock-card__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+  color: transparent;
+  caret-color: transparent;
+  z-index: 2;
+}
+
+.clock-card__face {
+  position: relative;
+  pointer-events: none;
+  z-index: 1;
+  min-width: 200px;
+  width: 100%;
+}
+
+.clock-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.04em;
+}
+.clock-card__date    { font-weight: 600; color: #fff; }
+.clock-card__weekday { color: rgba(255, 255, 255, 0.55); }
+
+.clock-card__badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  background: rgba(149, 220, 136, 0.18);
+  color: #b9efad;
+  border: 1px solid rgba(149, 220, 136, 0.32);
+}
+.clock-card__badge--past {
+  background: rgba(217, 147, 72, 0.18);
+  color: #f3c585;
+  border-color: rgba(217, 147, 72, 0.34);
+}
+.clock-card__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #95dc88;
+  box-shadow: 0 0 0 0 rgba(149, 220, 136, 0.6);
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+.clock-card__time {
+  margin-top: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 30px;
+  font-weight: 600;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 16px rgba(149, 220, 136, 0.18);
+}
+.clock-colon {
+  display: inline-block;
+  animation: clock-colon-blink 1s steps(1, end) infinite;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 重置按钮：与时钟卡同语言（暗色卡片 + 圆角 + 阴影 + ring） */
+.reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 92px;
+  padding: 0 22px;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(255, 186, 91, 0.18), transparent 55%),
+    linear-gradient(135deg, #4a3a3a 0%, #2f2424 100%);
+  color: #ffd0c2;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: 0;
+  box-shadow:
+    0 18px 40px rgba(74, 46, 38, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, color 0.2s ease;
+}
+.reset-btn:hover {
+  color: #fff;
+  box-shadow:
+    0 22px 50px rgba(74, 46, 38, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  transform: translateY(-1px);
+}
+.reset-btn:active { transform: translateY(0); }
+.reset-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 燃烧 loader：进度环 + 主火苗 + 余烬上飘 */
+.burn-loader {
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+
+.burn-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: #ff8a3d;
+  border-right-color: #ffba5b;
+  animation: burn-ring-spin 1.4s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  box-shadow: 0 0 24px rgba(255, 138, 61, 0.18);
+}
+
+.burn-base {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255, 138, 61, 0.6), transparent 70%);
+  filter: blur(2px);
+}
+
+/* 主火苗：泪滴形，1Hz 抖动；颜色由蓝芯→橙→金尾，类似真实火焰 */
+.burn-flame {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  width: 22px;
+  height: 38px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 80%,
+    #fff7d1 0%,
+    #ffd76a 22%,
+    #ff8a3d 55%,
+    #d8451f 80%,
+    transparent 100%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  filter: drop-shadow(0 0 12px rgba(255, 138, 61, 0.55));
+  animation: burn-flicker 0.9s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+/* 蓝色火芯，更小更亮 */
+.burn-flame::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 18px;
+  background: radial-gradient(ellipse at 50% 80%, #cfe9ff 0%, #6ec6ff 50%, transparent 80%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  opacity: 0.9;
+}
+
+/* 余烬粒子：从火苗位置向上飘散 */
+.burn-spark {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd76a 0%, #ff8a3d 60%, transparent 80%);
+  opacity: 0;
+  animation: burn-spark-rise 1.6s ease-out infinite;
+}
+.burn-spark--a { --sx: 0px;  --ex: -10px; animation-delay: 0s; }
+.burn-spark--b { --sx: 4px;  --ex: 12px;  animation-delay: 0.55s; }
+.burn-spark--c { --sx: -4px; --ex: 6px;   animation-delay: 1.05s; }
+
+/* ===== Flatpickr 主题微调 ===== */
 .flatpickr-calendar {
   border: 1px solid rgba(232, 223, 210, 0.95);
   border-radius: 22px;

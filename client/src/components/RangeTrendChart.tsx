@@ -36,7 +36,7 @@ export default function RangeTrendChart({ points }: { points: RangePoint[] }) {
           {
             label: '热量 kcal',
             data: points.map((p) => p.totalCalories),
-            borderColor: '#6f8e77',
+            borderColor: '#2e8b8b',
             backgroundColor: 'rgba(111,142,119,0.14)',
             borderWidth: 2,
             fill: true,
@@ -69,7 +69,7 @@ export default function RangeTrendChart({ points }: { points: RangePoint[] }) {
             labels: {
               boxWidth: 10,
               boxHeight: 10,
-              color: '#596159',
+              color: '#4a5860',
               usePointStyle: true
             }
           },
@@ -88,7 +88,7 @@ export default function RangeTrendChart({ points }: { points: RangePoint[] }) {
           x: {
             grid: { display: false },
             ticks: {
-              color: '#8a8f86',
+              color: '#8a949b',
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 9
@@ -97,7 +97,7 @@ export default function RangeTrendChart({ points }: { points: RangePoint[] }) {
           kcal: {
             beginAtZero: true,
             grid: { color: 'rgba(125,134,123,0.14)' },
-            ticks: { color: '#6f8e77', callback: (value) => `${value} kcal` }
+            ticks: { color: '#2e8b8b', callback: (value) => `${value} kcal` }
           },
           water: {
             beginAtZero: true,
@@ -116,7 +116,7 @@ export default function RangeTrendChart({ points }: { points: RangePoint[] }) {
     <div className="relative h-[260px]">
       <canvas ref={canvasRef} />
       {!hasData && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[#7d8279]">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[#8a949b]">
           选择时间范围后，趋势曲线会在这里呈现。
         </div>
       )}

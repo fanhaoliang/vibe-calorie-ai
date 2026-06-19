@@ -36,7 +36,7 @@ export default function CaloriesBmiTrendChart({ points }: { points: BmiTrendPoin
           {
             label: '热量 kcal',
             data: points.map((point) => point.calories),
-            borderColor: '#6f8e77',
+            borderColor: '#2e8b8b',
             backgroundColor: 'rgba(111,142,119,0.14)',
             fill: true,
             tension: 0.35,
@@ -69,7 +69,7 @@ export default function CaloriesBmiTrendChart({ points }: { points: BmiTrendPoin
             labels: {
               boxWidth: 10,
               boxHeight: 10,
-              color: '#596159',
+              color: '#4a5860',
               usePointStyle: true
             }
           },
@@ -87,12 +87,12 @@ export default function CaloriesBmiTrendChart({ points }: { points: BmiTrendPoin
           }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { color: '#8a8f86' } },
+          x: { grid: { display: false }, ticks: { color: '#8a949b' } },
           calories: {
             beginAtZero: true,
             grid: { color: 'rgba(125,134,123,0.12)' },
             ticks: {
-              color: '#6f8e77',
+              color: '#2e8b8b',
               callback: (value) => `${value} kcal`
             }
           },
